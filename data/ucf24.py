@@ -8,7 +8,8 @@ import os
 import os.path
 import torch
 import torch.utils.data as data
-import cv2, pickle
+import cv2
+import pickle
 import numpy as np
 
 CLASSES = (  # always index 0
@@ -68,12 +69,19 @@ def readsplitfile(splitfile):
 
 def make_lists(rootpath, imgtype, split=1, fulltest=False):
     imagesDir = rootpath + imgtype + '/'
-    splitfile = rootpath + 'splitfiles/trainlist{:02d}.txt'.format(split)
+    # splitfile = rootpath + '/mnt/home/jeffrey/data/ucf24/splitfiles/trainlist{:02d}.txt'.format(split)
+    splitfile = os.path.join(
+        rootpath,
+        '/mnt/home/jeffrey/data/ucf24/splitfiles/trainlist{:02d}.txt'.format(split)
+    )
     trainvideos = readsplitfile(splitfile)
     trainlist = []
     testlist = []
-
-    with open(rootpath + 'splitfiles/pyannot.pkl','rb') as fff:
+    pyanno = os.path.join(
+        rootpath,
+        '/mnt/home/jeffrey/data/ucf24/splitfiles/pyannot.pkl'
+    )
+    with open(pyanno, 'rb') as fff:
         database = pickle.load(fff)
 
     train_action_counts = np.zeros(len(CLASSES), dtype=np.int32)

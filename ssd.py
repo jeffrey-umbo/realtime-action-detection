@@ -200,6 +200,11 @@ def build_ssd(size=300, num_classes=21):
         print("Error: Sorry only SSD300 is supported currently!")
         return
 
-    return SSD(*multibox(vgg(base[str(size)], 3),
-                                add_extras(extras[str(size)], 1024),
-                                mbox[str(size)], num_classes), num_classes)
+    return SSD(
+        *multibox(
+            vgg(base[str(size)], 3),
+            add_extras(extras[str(size)], 1024),
+            mbox[str(size)], num_classes
+        ),
+        num_classes
+    )

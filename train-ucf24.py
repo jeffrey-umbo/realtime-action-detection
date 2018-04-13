@@ -26,8 +26,9 @@ import numpy as np
 import time
 from utils.evaluation import evaluate_detections
 from layers.box_utils import decode, nms
-from utils import  AverageMeter
+from utils import AverageMeter
 from torch.optim.lr_scheduler import MultiStepLR
+
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -52,7 +53,7 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--stepvalues', default='30000,60000,100000', type=str, help='iter numbers where learing rate to be dropped')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
-parser.add_argument('--visdom', default=False, type=str2bool, help='Use visdom to for loss visualization')
+parser.add_argument('--visdom', default=False, type=str2bool, help='Use visdom for loss visualization')
 parser.add_argument('--vis_port', default=8097, type=int, help='Port for Visdom Server')
 parser.add_argument('--data_root', default='/mnt/mars-fast/datasets/', help='Location of VOC root directory')
 parser.add_argument('--save_root', default='/mnt/mars-gamma/datasets/', help='Location to save checkpoint models')
@@ -61,9 +62,9 @@ parser.add_argument('--conf_thresh', default=0.01, type=float, help='Confidence 
 parser.add_argument('--nms_thresh', default=0.45, type=float, help='NMS threshold')
 parser.add_argument('--topk', default=50, type=int, help='topk for evaluation')
 
-## Parse arguments
+# Parse arguments
 args = parser.parse_args()
-## set random seeds
+# set random seeds
 np.random.seed(args.man_seed)
 torch.manual_seed(args.man_seed)
 if args.cuda:
@@ -84,9 +85,11 @@ def main():
     args.eval_step = 10000
     args.print_step = 10
 
-    ## Define the experiment Name will used to same directory and ENV for visdom
-    args.exp_name = 'CONV-SSD-{}-{}-bs-{}-{}-lr-{:05d}'.format(args.dataset,
-                args.input_type, args.batch_size, args.basenet[:-14], int(args.lr*100000))
+    # Define the experiment Name will used to same directory and ENV for visdom
+    args.exp_name = \
+        'CONV-SSD-{}-{}-bs-{}-{}-lr-{:05d}'.format(
+            args.dataset, args.input_type, args.batch_size, args.basenet[:-14], int(args.lr*100000)
+        )
 
     args.save_root += args.dataset+'/'
     args.save_root = args.save_root+'cache/'+args.exp_name+'/'
@@ -107,7 +110,6 @@ def main():
             xavier(m.weight.data)
             m.bias.data.zero_()
 
-
     print('Initializing weights for extra layers and HEADs...')
     # initialize newly added layers' weights with xavier method
     net.extras.apply(weights_init)
@@ -115,12 +117,12 @@ def main():
     net.conf.apply(weights_init)
 
     if args.input_type == 'fastOF':
-        print('Download pretrained brox flow trained model weights and place them at:::=> ',args.data_root + 'ucf24/train_data/brox_wieghts.pth')
-        pretrained_weights = args.data_root + 'ucf24/train_data/brox_wieghts.pth'
+        print('Download pretrained brox flow trained model weights and place them at:::=> ',args.data_root + '/train_data/brox_wieghts.pth')
+        pretrained_weights = args.data_root + '/train_data/brox_wieghts.pth'
         print('Loading base network...')
         net.load_state_dict(torch.load(pretrained_weights))
     else:
-        vgg_weights = torch.load(args.data_root +'ucf24/train_data/' + args.basenet)
+        vgg_weights = torch.load(args.data_root + '/ucf24/train_data/' + args.basenet)
         print('Loading base network...')
         net.vgg.load_state_dict(vgg_weights)
 
@@ -210,8 +212,16 @@ def train(args, net, optimizer, criterion, scheduler):
     torch.cuda.synchronize()
     t0 = time.perf_counter()
     iteration = 0
+
+    # tqdm display
+    epoch = 0
     while iteration <= args.max_iter:
-        for i, (images, targets, img_indexs) in enumerate(train_data_loader):
+        # visualize current epoch
+        epoch +=1
+        des = 'Epoch:[{}] Iter[{}][training]'.format(epoch,iteration)
+        progress = tqdm(train_data_loader, ascii=True, desc=des)
+
+        for i, (images, targets, img_indexs) in enumerate(progress):
 
             if iteration > args.max_iter:
                 break
@@ -252,16 +262,26 @@ def train(args, net, optimizer, criterion, scheduler):
                 torch.cuda.synchronize()
                 t1 = time.perf_counter()
                 batch_time.update(t1 - t0)
-
+                
                 print_line = 'Itration {:06d}/{:06d} loc-loss {:.3f}({:.3f}) cls-loss {:.3f}({:.3f}) ' \
                              'average-loss {:.3f}({:.3f}) Timer {:0.3f}({:0.3f})'.format(
                               iteration, args.max_iter, loc_losses.val, loc_losses.avg, cls_losses.val,
                               cls_losses.avg, losses.val, losses.avg, batch_time.val, batch_time.avg)
+                
+                # tqdm visuallization
+                info = {
+                    'loc-loss': '{:.3f}'.format(loc_losses.avg),
+                    'cls-loss': '{:.3f}'.format(cls_losses.avg),
+                    'avg-loss': '{:.3f}'.format(losses.avg),
+                    'time': '{:.3f}'.format(batch_time.avg)
+                }
+                progress.set_postfix(info)
+
 
                 torch.cuda.synchronize()
                 t0 = time.perf_counter()
                 log_file.write(print_line+'\n')
-                print(print_line)
+                # print(print_line)
 
                 # if args.visdom and args.send_images_to_visdom:
                 #     random_batch_index = np.random.randint(images.size(0))
@@ -290,7 +310,7 @@ def train(args, net, optimizer, criterion, scheduler):
                     print(ap_str)
                     log_file.write(ap_str+'\n')
                 ptr_str = '\nMEANAP:::=>'+str(mAP)+'\n'
-                print(ptr_str)
+                # print(ptr_str)
                 log_file.write(ptr_str)
 
                 if args.visdom:
@@ -307,8 +327,15 @@ def train(args, net, optimizer, criterion, scheduler):
                 torch.cuda.synchronize()
                 t0 = time.perf_counter()
                 prt_str = '\nValidation TIME::: {:0.3f}\n\n'.format(t0-tvs)
-                print(prt_str)
+                # print(prt_str)
                 log_file.write(ptr_str)
+
+                # tqdm visuallization
+                info = {
+                    'mAP': str(mAP),
+                    'Validation TIME': '{:0.3f}'.format(t0-tvs)
+                }
+                progress.set_postfix(info)
 
     log_file.close()
 
