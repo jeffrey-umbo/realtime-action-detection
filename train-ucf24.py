@@ -22,6 +22,7 @@ from data import v2, UCF24Detection, AnnotationTransform, detection_collate, CLA
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
 from ssd import build_ssd
+from tqdm import tqdm
 import numpy as np
 import time
 from utils.evaluation import evaluate_detections
@@ -41,7 +42,7 @@ parser.add_argument('--dataset', default='ucf24', help='pretrained base model')
 parser.add_argument('--ssd_dim', default=300, type=int, help='Input Size for SSD') # only support 300 now
 parser.add_argument('--input_type', default='rgb', type=str, help='INput tyep default rgb options are [rgb,brox,fastOF]')
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
-parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
+parser.add_argument('--batch_size', default=50, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
 parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--max_iter', default=150000, type=int, help='Number of training iterations')
@@ -217,8 +218,8 @@ def train(args, net, optimizer, criterion, scheduler):
     epoch = 0
     while iteration <= args.max_iter:
         # visualize current epoch
-        epoch +=1
-        des = 'Epoch:[{}] Iter[{}][training]'.format(epoch,iteration)
+        epoch += 1
+        des = 'Epoch:[{}]]'.format(epoch)
         progress = tqdm(train_data_loader, ascii=True, desc=des)
 
         for i, (images, targets, img_indexs) in enumerate(progress):
@@ -270,6 +271,7 @@ def train(args, net, optimizer, criterion, scheduler):
                 
                 # tqdm visuallization
                 info = {
+                    'iteration': iteration,
                     'loc-loss': '{:.3f}'.format(loc_losses.avg),
                     'cls-loss': '{:.3f}'.format(cls_losses.avg),
                     'avg-loss': '{:.3f}'.format(losses.avg),
