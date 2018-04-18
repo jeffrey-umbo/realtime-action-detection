@@ -11,6 +11,7 @@ Updated by Gurkirt Singh for ucf101-24 dataset
 import os
 import numpy as np
 
+
 def voc_ap(rec, prec, use_07_metric=False):
     """ ap = voc_ap(rec, prec, [use_07_metric])
     Compute VOC AP given precision and recall.
@@ -49,7 +50,7 @@ def voc_ap(rec, prec, use_07_metric=False):
 def get_gt_of_cls(gt_boxes, cls):
     cls_gt_boxes = []
     for i in range(len(gt_boxes)):
-        if gt_boxes[i,-1] == cls:
+        if gt_boxes[i, -1] == cls:
             cls_gt_boxes.append(gt_boxes[i, :-1])
     return np.asarray(cls_gt_boxes)
 
@@ -60,7 +61,7 @@ def compute_iou(cls_gt_boxes, box):
     for m in range(ious.shape[0]):
         gtbox = cls_gt_boxes[m]
 
-        xmin = max(gtbox[0],box[0])
+        xmin = max(gtbox[0], box[0])
         ymin = max(gtbox[1], box[1])
         xmax = min(gtbox[2], box[2])
         ymax = min(gtbox[3], box[3])
@@ -76,6 +77,7 @@ def compute_iou(cls_gt_boxes, box):
 
     return ious
 
+
 def evaluate_detections(gt_boxes, det_boxes, CLASSES=[], iou_thresh=0.5):
 
     ap_strs = []
@@ -89,28 +91,54 @@ def evaluate_detections(gt_boxes, det_boxes, CLASSES=[], iou_thresh=0.5):
         num_postives = 0.0
         for nf in range(num_frames): # loop over each frame 'nf'
                 # if len(gt_boxes[nf])>0 and len(det_boxes[cls_ind][nf]):
-                frame_det_boxes = np.copy(det_boxes[cls_ind][nf]) # get frame detections for class cls in nf
-                cls_gt_boxes = get_gt_of_cls(np.copy(gt_boxes[nf]), cls_ind) # get gt boxes for class cls in nf frame
+
+                # get frame detections for class cls in nf
+                frame_det_boxes = np.copy(det_boxes[cls_ind][nf])
+
+                # get gt boxes for class cls in nf frame
+                cls_gt_boxes = get_gt_of_cls(np.copy(gt_boxes[nf]), cls_ind)
                 num_postives += cls_gt_boxes.shape[0]
-                if frame_det_boxes.shape[0]>0: # check if there are dection for class cls in nf frame
-                    argsort_scores = np.argsort(-frame_det_boxes[:,-1]) # sort in descending order
-                    for i, k in enumerate(argsort_scores): # start from best scoring detection of cls to end
-                        box = frame_det_boxes[k, :-1] # detection bounfing box
-                        score = frame_det_boxes[k,-1] # detection score
-                        ispositive = False # set ispostive to false every time
-                        if cls_gt_boxes.shape[0]>0: # we can only find a postive detection
+
+                # check if there are dection for class cls in nf frame
+                if frame_det_boxes.shape[0]>0:
+                    # sort in descending order
+                    argsort_scores = np.argsort(-frame_det_boxes[:,-1])
+
+                    # start from best scoring detection of cls to end
+                    for i, k in enumerate(argsort_scores):
+                        # detection bounfing box
+                        box = frame_det_boxes[k, :-1]
+
+                        # detection score
+                        score = frame_det_boxes[k,-1]
+
+                        # set ispostive to false every time
+                        ispositive = False
+
+                        # we can only find a postive detection
+                        if cls_gt_boxes.shape[0]>0:
                             # if there is atleast one gt bounding for class cls is there in frame nf
-                            iou = compute_iou(cls_gt_boxes, box) # compute IOU between remaining gt boxes
-                            # and detection boxes
-                            maxid = np.argmax(iou)  # get the max IOU window gt index
-                            if iou[maxid] >= iou_thresh: # check is max IOU is greater than detection threshold
-                                ispositive = True # if yes then this is ture positive detection
-                                cls_gt_boxes = np.delete(cls_gt_boxes, maxid, 0) # remove assigned gt box
-                        scores[det_count] = score # fill score array with score of current detection
+                            # compute IOU between remaining gt boxes and detection boxes
+                            iou = compute_iou(cls_gt_boxes, box)
+                           
+                            # get the max IOU window gt index
+                            maxid = np.argmax(iou)
+                            # check if max IOU is greater than detection threshold
+
+                            if iou[maxid] >= iou_thresh:
+                                # if yes then this is ture positive detection
+                                ispositive = True
+                                # remove assigned gt box
+                                cls_gt_boxes = np.delete(cls_gt_boxes, maxid, 0)
+                        # fill score array with score of current detection
+                        scores[det_count] = score
                         if ispositive:
-                            istp[det_count] = 1 # set current detection index (det_count)
-                            #  to 1 if it is true postive example
+                            # set current detection index (det_count)
+                            # to 1 if it is true postive example
+                            istp[det_count] = 1
+                            
                         det_count += 1
+                        
         if num_postives<1:
             num_postives =1
         scores = scores[:det_count]
@@ -148,7 +176,7 @@ def save_detection_framewise(det_boxes, image_ids, iteration):
             for d in range(len(frame_det_boxes)):
                 line = str(cls_ind+1)
                 for k in range(5):
-                    line += ' {:f}'.format(frame_det_boxes[d,k])
+                    line += ' {:f}'.format(frame_det_boxes[d, k])
                 line += '\n'
                 fid.write(line)
         fid.close()

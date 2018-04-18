@@ -18,7 +18,8 @@ import torch.nn.init as init
 import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
-from data import v2, UCF24Detection, AnnotationTransform, detection_collate, CLASSES, BaseTransform
+from data import v2, UCF24Detection, AnnotationTransform, \
+                 detection_collate, CLASSES, BaseTransform
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
 from ssd import build_ssd
@@ -27,7 +28,7 @@ import numpy as np
 import time
 from utils.evaluation import evaluate_detections
 from layers.box_utils import decode, nms
-from utils import AverageMeter
+from utils.extentions import AverageMeter
 from torch.optim.lr_scheduler import MultiStepLR
 
 
@@ -56,8 +57,8 @@ parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight dec
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--visdom', default=False, type=str2bool, help='Use visdom for loss visualization')
 parser.add_argument('--vis_port', default=8097, type=int, help='Port for Visdom Server')
-parser.add_argument('--data_root', default='/mnt/mars-fast/datasets/', help='Location of VOC root directory')
-parser.add_argument('--save_root', default='/mnt/mars-gamma/datasets/', help='Location to save checkpoint models')
+parser.add_argument('--data_root', default='/mnt/home/jeffrey/data/', help='Location of VOC root directory')
+parser.add_argument('--save_root', default='/mnt/home/jeffrey/data/', help='Location to save checkpoint models')
 parser.add_argument('--iou_thresh', default=0.5, type=float, help='Evaluation threshold')
 parser.add_argument('--conf_thresh', default=0.01, type=float, help='Confidence threshold for evaluation')
 parser.add_argument('--nms_thresh', default=0.45, type=float, help='NMS threshold')
@@ -71,7 +72,6 @@ torch.manual_seed(args.man_seed)
 if args.cuda:
     torch.cuda.manual_seed_all(args.man_seed)
 
-
 torch.set_default_tensor_type('torch.FloatTensor')
 
 
@@ -84,6 +84,7 @@ def main():
     args.stepvalues = [int(val) for val in args.stepvalues.split(',')]
     args.loss_reset_step = 30
     args.eval_step = 10000
+    args.eval_step = 1
     args.print_step = 10
 
     # Define the experiment Name will used to same directory and ENV for visdom
@@ -132,7 +133,7 @@ def main():
     parameter_dict = dict(net.named_parameters()) # Get parmeter of network in dictionary format wtih name being key
     params = []
 
-    #Set different learning rate to bias layers and set their weight_decay to 0
+    # Set different learning rate to bias layers and set their weight_decay to 0
     for name, param in parameter_dict.items():
         if name.find('bias') > -1:
             print(name, 'layer parameters will be trained @ {}'.format(args.lr*2))
@@ -165,10 +166,13 @@ def train(args, net, optimizer, criterion, scheduler):
     print('Loading Dataset...')
     train_dataset = UCF24Detection(args.data_root, args.train_sets, SSDAugmentation(args.ssd_dim, args.means),
                                    AnnotationTransform(), input_type=args.input_type)
+
     val_dataset = UCF24Detection(args.data_root, 'test', BaseTransform(args.ssd_dim, args.means),
                                  AnnotationTransform(), input_type=args.input_type,
                                  full_test=False)
-    epoch_size = len(train_dataset) // args.batch_size
+    # 2396
+    epoch_size = len(train_dataset) // args.batch_size 
+    # print("epoch_size:{}".format(epoch_size))
     print('Training SSD on', train_dataset.name)
 
     if args.visdom:
@@ -194,7 +198,7 @@ def train(args, net, optimizer, criterion, scheduler):
             legends.append(cls)
         val_lot = viz.line(
             X=torch.zeros((1,)).cpu(),
-            Y=torch.zeros((1,args.num_classes)).cpu(),
+            Y=torch.zeros((1, args.num_classes)).cpu(),
             opts=dict(
                 xlabel='Iteration',
                 ylabel='Mean AP',
@@ -202,7 +206,6 @@ def train(args, net, optimizer, criterion, scheduler):
                 legend=legends
             )
         )
-
 
     batch_iterator = None
     train_data_loader = data.DataLoader(train_dataset, args.batch_size, num_workers=args.num_workers,
@@ -253,12 +256,20 @@ def train(args, net, optimizer, criterion, scheduler):
 
             if iteration % args.print_step == 0 and iteration>0:
                 if args.visdom:
-                    losses_list = [loc_losses.val, cls_losses.val, losses.val, loc_losses.avg, cls_losses.avg, losses.avg]
-                    viz.line(X=torch.ones((1, 6)).cpu() * iteration,
+                    losses_list = [
+                        loc_losses.val, 
+                        cls_losses.val, 
+                        losses.val, 
+                        loc_losses.avg, 
+                        cls_losses.avg, 
+                        losses.avg
+                    ]
+                    viz.line(
+                        X=torch.ones((1, 6)).cpu() * iteration,
                         Y=torch.from_numpy(np.asarray(losses_list)).unsqueeze(0).cpu(),
                         win=lot,
-                        update='append')
-
+                        update='append'
+                    )
 
                 torch.cuda.synchronize()
                 t1 = time.perf_counter()
@@ -278,7 +289,6 @@ def train(args, net, optimizer, criterion, scheduler):
                     'time': '{:.3f}'.format(batch_time.avg)
                 }
                 progress.set_postfix(info)
-
 
                 torch.cuda.synchronize()
                 t0 = time.perf_counter()
@@ -352,7 +362,7 @@ def validate(args, net, val_data_loader, val_dataset, iteration_num, iou_thresh=
     gt_boxes = []
     print_time = True
     batch_iterator = None
-    val_step = 100
+    val_step = 10
     count = 0
     torch.cuda.synchronize()
     ts = time.perf_counter()
@@ -376,16 +386,16 @@ def validate(args, net, val_data_loader, val_dataset, iteration_num, iou_thresh=
         conf_preds = output[1]
         prior_data = output[2]
 
-        if print_time and val_itr%val_step == 0:
+        if print_time and val_itr % val_step == 0:
             torch.cuda.synchronize()
             tf = time.perf_counter()
             print('Forward Time {:0.3f}'.format(tf-t1))
         for b in range(batch_size):
             gt = targets[b].numpy()
-            gt[:,0] *= width
-            gt[:,2] *= width
-            gt[:,1] *= height
-            gt[:,3] *= height
+            gt[:, 0] *= width
+            gt[:, 2] *= width
+            gt[:, 1] *= height
+            gt[:, 3] *= height
             gt_boxes.append(gt)
             decoded_boxes = decode(loc_data[b].data, prior_data.data, args.cfg['variance']).clone()
             conf_scores = net.softmax(conf_preds[b]).data.clone()
@@ -422,17 +432,17 @@ def validate(args, net, val_data_loader, val_dataset, iteration_num, iou_thresh=
 
                 det_boxes[cl_ind-1].append(cls_dets)
             count += 1
-        if val_itr%val_step == 0:
+        if val_itr % val_step == 0:
             torch.cuda.synchronize()
             te = time.perf_counter()
             print('im_detect: {:d}/{:d} time taken {:0.3f}'.format(count, num_images, te-ts))
             torch.cuda.synchronize()
             ts = time.perf_counter()
-        if print_time and val_itr%val_step == 0:
+        if print_time and val_itr % val_step == 0:
             torch.cuda.synchronize()
             te = time.perf_counter()
             print('NMS stuff Time {:0.3f}'.format(te - tf))
-    print('Evaluating detections for itration number ', iteration_num)
+    print('Evaluating detections for iteration number ', iteration_num)
     return evaluate_detections(gt_boxes, det_boxes, CLASSES, iou_thresh=iou_thresh)
 
 

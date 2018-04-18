@@ -9,13 +9,16 @@ import os.path
 import torch
 import torch.utils.data as data
 import cv2
+from PIL import Image
 import pickle
 import numpy as np
+
+
 
 CLASSES = (  # always index 0
         'Basketball', 'BasketballDunk', 'Biking', 'CliffDiving', 'CricketBowling', 'Diving', 'Fencing',
         'FloorGymnastics', 'GolfSwing', 'HorseRiding', 'IceDancing', 'LongJump', 'PoleVault', 'RopeClimbing',
-        'SalsaSpin','SkateBoarding', 'Skiing', 'Skijet', 'SoccerJuggling',
+        'SalsaSpin', 'SkateBoarding', 'Skiing', 'Skijet', 'SoccerJuggling',
         'Surfing', 'TennisSwing', 'TrampolineJumping', 'VolleyballSpiking', 'WalkingWithDog')
 
 
@@ -118,9 +121,9 @@ def make_lists(rootpath, imgtype, split=1, fulltest=False):
                 assert actidx == label, 'Tube label and video label should be same'
                 box = tube['boxes'][frame_id, :]  # get the box as an array
                 box = box.astype(np.float32)
-                box[2] += box[0]  #convert width to xmax
-                box[3] += box[1]  #converst height to ymax
-                tube_labels[frame_num, tubeid] = 1 #label+1  # change label in tube_labels matrix to 1 form 0
+                box[2] += box[0]  # convert width to xmax
+                box[3] += box[1]  # converst height to ymax
+                tube_labels[frame_num, tubeid] = 1 # label+1  # change label in tube_labels matrix to 1 form 0
                 tube_boxes[frame_num][tubeid] = box  # put the box in matrix of lists
 
         possible_frame_nums = np.arange(0, lastf, step)
@@ -133,8 +136,9 @@ def make_lists(rootpath, imgtype, split=1, fulltest=False):
                 all_boxes = []
                 labels = []
                 image_name = imagesDir + videoname+'/{:05d}.jpg'.format(frame_num+1)
-                #label_name = rootpath + 'labels/' + videoname + '/{:05d}.txt'.format(frame_num + 1)
-                assert os.path.isfile(image_name), 'Image does not exist'+image_name
+                # label_name = rootpath + 'labels/' + videoname + '/{:05d}.txt'.format(frame_num + 1)
+                assert os.path.isfile(image_name), \
+                            'Image does not exist' + image_name
                 for tubeid, tube in enumerate(annotations):
                     label = tube['label']
                     if tube_labels[frame_num, tubeid]>0:
@@ -150,15 +154,15 @@ def make_lists(rootpath, imgtype, split=1, fulltest=False):
                     test_action_counts[actidx] += 1 #len(labels)
             elif fulltest and not istrain: # if test video with no ground truth and fulltest is trues
                 testlist.append([vid, frame_num+1, np.asarray([9999]), np.zeros((1,4))])
-
-    for actidx, act_count in enumerate(train_action_counts): # just to see the distribution of train and test sets
-        print('train {:05d} test {:05d} action {:02d} {:s}'.format(act_count, test_action_counts[actidx] , int(actidx), CLASSES[actidx]))
+    # just to see the distribution of train and test sets
+    for actidx, act_count in enumerate(train_action_counts):
+        print('train {:05d} test {:05d} action {:02d} {:s}'.format(act_count, test_action_counts[actidx], int(actidx), CLASSES[actidx]))
 
     newratios = train_action_counts/5000
-    #print('new   ratios', newratios)
+    # print('new   ratios', newratios)
     line = '['
     for r in newratios:
-        line +='{:0.2f}, '.format(r)
+        line += '{:0.2f}, '.format(r)
     print(line+']')
     print('Trainlistlen', len(trainlist), ' testlist ', len(testlist))
 
@@ -212,7 +216,12 @@ class UCF24Detection(data.Dataset):
         img = cv2.imread(img_name)
         height, width, channels = img.shape
 
-        target = self.target_transform(annot_info[3], annot_info[2], width, height)
+        target = self.target_transform(
+            annot_info[3],
+            annot_info[2],
+            width,
+            height
+        )
 
         if self.transform is not None:
             target = np.array(target)
