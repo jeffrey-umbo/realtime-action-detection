@@ -14,7 +14,6 @@ import pickle
 import numpy as np
 
 
-
 CLASSES = (  # always index 0
         'Basketball', 'BasketballDunk', 'Biking', 'CliffDiving', 'CricketBowling', 'Diving', 'Fencing',
         'FloorGymnastics', 'GolfSwing', 'HorseRiding', 'IceDancing', 'LongJump', 'PoleVault', 'RopeClimbing',
@@ -90,10 +89,10 @@ def make_lists(rootpath, imgtype, split=1, fulltest=False):
     train_action_counts = np.zeros(len(CLASSES), dtype=np.int32)
     test_action_counts = np.zeros(len(CLASSES), dtype=np.int32)
 
-    #4500ratios = np.asarray([1.1, 0.8, 4.7, 1.4, 0.9, 2.6, 2.2, 3.0, 3.0, 5.0, 6.2, 2.7,
+    # 4500ratios = np.asarray([1.1, 0.8, 4.7, 1.4, 0.9, 2.6, 2.2, 3.0, 3.0, 5.0, 6.2, 2.7,
     #                     3.5, 3.1, 4.3, 2.5, 4.5, 3.4, 6.7, 3.6, 1.6, 3.4, 0.6, 4.3])
     ratios = np.asarray([1.03, 0.75, 4.22, 1.32, 0.8, 2.36, 1.99, 2.66, 2.68, 4.51, 5.56, 2.46, 3.17, 2.76, 3.89, 2.28, 4.01, 3.08, 6.06, 3.28, 1.51, 3.05, 0.6, 3.84])
-    #ratios = np.ones_like(ratios) #TODO:uncomment this line and line 155, 156 to compute new ratios might be useful for JHMDB21
+    # ratios = np.ones_like(ratios) #TODO:uncomment this line and line 155, 156 to compute new ratios might be useful for JHMDB21
     video_list = []
     for vid, videoname in enumerate(sorted(database.keys())):
         video_list.append(videoname)
@@ -112,7 +111,7 @@ def make_lists(rootpath, imgtype, split=1, fulltest=False):
         annotations = database[videoname]['annotations']
         num_tubes = len(annotations)
 
-        tube_labels = np.zeros((numf,num_tubes),dtype=np.int16) # check for each tube if present in
+        tube_labels = np.zeros((numf, num_tubes), dtype=np.int16) # check for each tube if present in
         tube_boxes = [[[] for _ in range(num_tubes)] for _ in range(numf)]
         for tubeid, tube in enumerate(annotations):
             # print('numf00', numf, tube['sf'], tube['ef'])
@@ -130,7 +129,7 @@ def make_lists(rootpath, imgtype, split=1, fulltest=False):
         # print('numf',numf,possible_frame_nums[-1])
         for frame_num in possible_frame_nums: # loop from start to last possible frame which can make a legit sequence
             frame_num = int(frame_num)
-            check_tubes = tube_labels[frame_num,:]
+            check_tubes = tube_labels[frame_num, :]
 
             if np.sum(check_tubes)>0:  # check if there aren't any semi overlapping tubes
                 all_boxes = []

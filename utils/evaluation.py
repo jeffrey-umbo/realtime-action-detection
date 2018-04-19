@@ -82,7 +82,7 @@ def evaluate_detections(gt_boxes, det_boxes, CLASSES=[], iou_thresh=0.5):
 
     ap_strs = []
     num_frames = len(gt_boxes)
-    print('Evaluating for ', num_frames, 'frames')
+    # print('Evaluating for ', num_frames, 'frames')
     ap_all = np.zeros(len(CLASSES), dtype=np.float32)
     for cls_ind, cls in enumerate(CLASSES): # loop over each class 'cls'
         scores = np.zeros(num_frames * 220)

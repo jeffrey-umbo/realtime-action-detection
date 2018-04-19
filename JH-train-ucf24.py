@@ -34,7 +34,7 @@ parser.add_argument('--input_type', default='rgb', type=str, help='INput tyep de
 parser.add_argument('--jaccard_threshold', default=0.5, type=float, help='Min Jaccard index for matching')
 parser.add_argument('--batch_size', default=32, type=int, help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str, help='Resume from checkpoint')
-parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
+parser.add_argument('--num_workers', default=8, type=int, help='Number of workers used in dataloading')
 parser.add_argument('--nb_epoches', default=65, type=int, help='Number of training epoch')
 parser.add_argument('--man_seed', default=123, type=int, help='manualseed for reproduction')
 parser.add_argument('--cuda', default=True, type=str2bool, help='Use cuda to train model')
@@ -44,7 +44,7 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--data_root', default='/mnt/home/jeffrey/data/', help='Location of UCF24 root directory')
-parser.add_argument('--save_root', default='/mnt/home/jeffrey/data/', help='Location to save checkpoint models')
+parser.add_argument('--save_root', default='/mnt/home/jeffrey/workspace/realtime-action-detection/', help='Location to save checkpoint models')
 parser.add_argument('--iou_thresh', default=0.5, type=float, help='Evaluation threshold')
 parser.add_argument('--conf_thresh', default=0.01, type=float, help='Confidence threshold for evaluation')
 parser.add_argument('--nms_thresh', default=0.45, type=float, help='NMS threshold')
@@ -69,9 +69,9 @@ class ActionDetection_module():
         self.args.means = (104, 117, 123)
         num_classes = len(CLASSES) + 1
         self.args.num_classes = num_classes
-        self.args.loss_reset_step = 30
+        # self.args.loss_reset_step = 30
         self.args.eval_step = 10000
-        self.args.print_step = 100
+        self.args.print_step = 1000
 
         # the name of experiment
         self.args.exp_name = 'CONV-SSD-{}-{}-bs-{}-{}-lr-{:05d}'.format(
@@ -81,17 +81,16 @@ class ActionDetection_module():
             self.args.baseself_net[:-14],
             int(self.args.lr*100000)
         )
-        # save root for model information
-        self.args.save_root += self.args.dataset+'/'
-        self.args.save_root = self.args.save_root+'cache/'+self.args.exp_name+'/'
-
-        if not os.path.isdir(self.args.save_root):
-            os.makedirs(self.args.save_root)
-
         # save root for tensorboard
         log_dir = os.path.join(
             self.args.save_root+'runs/'+self.args.exp_name+'/'
         )
+        # self.args.save_root += self.args.dataset+'/'
+        self.args.save_root = self.args.save_root+'cache/'+self.args.exp_name+'/'
+
+        if not os.path.isdir(self.args.save_root):
+            os.makedirs(self.args.save_root)
+        
         self.tensorboard = SummaryWriter(log_dir=log_dir)
 
         # Display and Record the experiment info in "training.log"
@@ -100,7 +99,9 @@ class ActionDetection_module():
         # Display all of the values in self.args
         for arg in vars(self.args):
             print("[{}]: {}".format(arg, getattr(self.args, arg)))
-            self.log_file.write(str(arg)+': '+str(getattr(self.args, arg))+'\n')
+            self.log_file.write(
+                str(arg)+': '+str(getattr(self.args, arg))+'\n'
+            )
 
     def build_model(self):
 
@@ -125,11 +126,18 @@ class ActionDetection_module():
 
         if self.args.input_type == 'fastOF':
             print('Download pretrained brox flow trained model weights and place them at:::=> ',self.args.data_root + '/train_data/brox_wieghts.pth')
-            pretrained_weights = self.args.data_root + '/train_data/brox_wieghts.pth'
+            pretrained_weights = \
+                self.args.data_root + '/train_data/brox_wieghts.pth'
             print('Loading base network...')
             self.net.load_state_dict(torch.load(pretrained_weights))
         else:
-            vgg_weights = torch.load(self.args.data_root + '/ucf24/train_data/' + self.args.baseself_net)
+            vgg_weights = torch.load(
+                os.path.join(
+                    self.args.data_root,
+                    '/ucf24/train_data/',
+                    self.args.baseself_net
+                )
+            )
             print('Loading base network...')
             self.net.vgg.load_state_dict(vgg_weights)
 
@@ -168,7 +176,7 @@ class ActionDetection_module():
             use_gpu=self.args.cuda
         )
         self.scheduler = ReduceLROnPlateau(
-            self.optimizer, 'min', patience=1, verbose=True)
+            self.optimizer, 'max', patience=1, verbose=True)
  
     def load_dataset(self):
         print('Loading Dataset...')
@@ -268,35 +276,33 @@ class ActionDetection_module():
                 'loc-loss': '{:.2f}'.format(loc_losses.avg),
                 'cls-loss': '{:.2f}'.format(cls_losses.avg),
                 'avg-loss': '{:.2f}'.format(losses.avg),
-                'time': '{:.2f}'.format(batch_time.avg)
+                # 'time': '{:.2f}'.format(batch_time.avg)
             }
             progress.set_postfix(info)
 
             if step % self.args.print_step == 0:
-                torch.cuda.synchronize()
-                # tensorboard utils
-                tb_info = {
-                    'Batch Time': batch_time.avg,
-                    'loc-loss': '{:.3f}'.format(loc_losses.avg),
-                    'cls-loss': '{:.3f}'.format(cls_losses.avg),
-                    'avg-loss': '{:.3f}'.format(losses.avg),
-                    'lr': self.optimizer.param_groups[0]['lr']
-                }
-                for k, v in tb_info.items():
-                    self.tensorboard.add_scalar('train/' + k, v, self.iterations)
-
                 # print on log file
                 print_line = \
-                    'Epoch[{}][{:06d}/{:06d}, Iterations: {}'.format(
+                    'Epoch[{}][{:06d}/{:06d}], Iterations: {}'.format(
                         self.epoch,
                         step,
                         len(self.train_loader),
                         self.iterations
                     )
                 self.log_file.write(print_line)
-                for k, v in tb_info.items():
-                    self.log_file.write('[{}]: {}'.format(k, v))
+                for k, v in info.items():
+                    self.log_file.write(' [{}]: {}'.format(k, v))
                 self.log_file.write('\n')
+        # tensorboard utils
+        tb_info = {
+            'Batch Time': batch_time.avg,
+            'loc-loss': '{:.3f}'.format(loc_losses.avg),
+            'cls-loss': '{:.3f}'.format(cls_losses.avg),
+            'avg-loss': '{:.3f}'.format(losses.avg),
+            'lr': self.optimizer.param_groups[0]['lr']
+        }
+        for k, v in tb_info.items():
+            self.tensorboard.add_scalar('train/' + k, v, self.iterations)
 
     def val_1epoch(self):
         # batch_time = AverageMeter()
@@ -397,12 +403,12 @@ class ActionDetection_module():
             if step % val_step == 0:
                 torch.cuda.synchronize()
                 te = time.perf_counter()
-            # print('NMS stuff Time {:0.3f}'.format(te - tf))
+                # print('NMS stuff Time {:0.3f}'.format(te - tf))
                 
                 info = {
-                    'det_img':'{:05d}/{:05d}'.format(count, len(self.val_dataset)),
-                    # 'gpu time': '{:.2f}'.format(tf-t0),
-                    # 'cpu time': '{:.2f}'.format(te-tf),
+                    # 'det_img': '{:05d}/{:05d}'.format(count, len(self.val_dataset)),
+                    'gpu time': '{:.2f}'.format(tf-t0),
+                    'cpu time': '{:.2f}'.format(te-tf),
                     'loc-loss': '{:.2f}'.format(loc_losses.avg),
                     'cls-loss': '{:.2f}'.format(cls_losses.avg),
                     'avg-loss': '{:.2f}'.format(losses.avg),
@@ -424,7 +430,16 @@ class ActionDetection_module():
         }
         for k, v in tb_info.items():
             self.tensorboard.add_scalar('val/' + k, v, self.iterations)
-        return mAP
+
+        # write info in log file
+        print_line = \
+            'Epoch[{}][val], Iterations: {}'.format(self.epoch)
+        self.log_file.write(print_line)
+        for k, v in tb_info.items():
+            self.log_file.write(' [{}]: {}'.format(k, v))
+        self.log_file.write('\n')
+    
+        return mAP, ap_all, ap_strs
 
     def run(self):
         # call function
@@ -441,8 +456,11 @@ class ActionDetection_module():
             # train
             self.train_1epoch()
             # val
-            mAP = self.val_1epoch()
+            mAP, ap_all, ap_strs = self.val_1epoch()
             self.scheduler.step(mAP)
+
+            for ap_str in ap_strs:
+                self.log_file.write(ap_str+'\n')
 
             # Save the current model and the best model
             is_best = mAP > self.best_mAP
@@ -458,6 +476,7 @@ class ActionDetection_module():
 def main():
     action_detection_module = ActionDetection_module()
     action_detection_module.run()
+
 
 if __name__ == '__main__':
     main()
